@@ -1,0 +1,71 @@
+[tool.poetry]
+name = "agent-data-fabric"
+version = "0.1.0"
+description = "Discover a data environment and auto-generate a semantic model plus a safe, MCP-compatible interface for AI agents."
+authors = ["Dominik Kolasa <hello@dominikkolasa.pl>"]
+license = "MIT"
+readme = "README.md"
+packages = [{ include = "agent_data_fabric" }]
+homepage = "https://dominikkolasa.pl"
+repository = "https://github.com/dominikkolasa/agent-data-fabric"
+keywords = ["mcp", "postgres", "semantic-layer", "ai-agents", "data-fabric"]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+sqlalchemy = "^2.0.30"
+"psycopg" = { version = "^3.2.1", extras = ["binary"] }
+pydantic = "^2.7.0"
+pydantic-settings = "^2.3.0"
+typer = "^0.15.1"
+rich = "^13.7.1"
+pyyaml = "^6.0.1"
+sqlglot = "^25.0.0"
+mcp = "^1.2.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.2.0"
+pytest-cov = "^5.0.0"
+testcontainers = { version = "^4.7.0", extras = ["postgres"] }
+ruff = "^0.5.0"
+black = "^24.4.2"
+mypy = "^1.10.0"
+pre-commit = "^3.7.1"
+types-pyyaml = "^6.0.12"
+
+[tool.poetry.scripts]
+agent-fabric = "agent_data_fabric.cli:app"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: tests that require Docker (testcontainers)",
+]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "W"]
+# B008: Typer relies on function calls (typer.Option/Argument) in defaults.
+ignore = ["B008"]
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["testcontainers.*"]
+ignore_missing_imports = true
