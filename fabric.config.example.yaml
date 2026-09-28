@@ -1,0 +1,20 @@
+# Example fabric.config.yaml. Copy to ./fabric.config.yaml, or point --config /
+# AGENT_FABRIC_CONFIG at a copy elsewhere. NEVER commit real credentials — prefer
+# a DSN with a read-only role, and consider leaving `dsn` unset here and passing
+# it via AGENT_FABRIC_DSN or --dsn instead.
+#
+# Precedence (highest first): --dsn/--type/... CLI flags > AGENT_FABRIC_* env
+# vars > .env > this file > built-in defaults. Every key below is optional.
+
+# dsn: postgresql+psycopg://readonly:changeme@localhost:5432/app
+
+include_schemas: []
+exclude_schemas: [pg_catalog, information_schema]
+
+default_sample_limit: 10
+max_sample_limit: 100
+query_timeout_seconds: 15
+
+mongo_sample_size: 100
+include_collections: []
+exclude_collections: []

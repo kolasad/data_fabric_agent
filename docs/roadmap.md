@@ -13,7 +13,11 @@ Milestones map to the Agent Data Fabric project brief.
 - Second connector (OpenAPI **or** MongoDB) behind the existing plugin registry. ✅
   MongoDB discovery via document sampling; naming-heuristic relationship inference
   reused unmodified. Live query tools (`sample_rows`/`run_select`) remain Postgres-only.
-- Config file (in addition to env/flags) and multi-resource models.
+- Config file (in addition to env/flags). ✅ `fabric.config.yaml`, resolved from
+  `--config` / `AGENT_FABRIC_CONFIG` / `./fabric.config.yaml`, ranked below env vars and
+  `.env` per `config.py`'s `settings_customise_sources`.
+- Multi-resource models (still single-resource today; a config-driven `resources:` list
+  describing several connectors in one `fabric.model.yaml` is the next step).
 - Model diffing using `source_fingerprint` (detect + report schema drift).
 
 ## v0.2

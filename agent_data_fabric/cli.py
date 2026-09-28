@@ -44,6 +44,14 @@ def _sniff_resource_type(dsn: str) -> str:
     return ResourceType.postgres.value
 
 
+def _build_settings(config: Path | None) -> Settings:
+    try:
+        return Settings(_config_file=config)
+    except FileNotFoundError as exc:
+        err_console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2) from exc
+
+
 @app.command()
 def discover(
     dsn: str | None = typer.Option(
@@ -64,10 +72,16 @@ def discover(
         "-o",
         help="Where to write the semantic model (.yaml or .json).",
     ),
+    config: Path | None = typer.Option(
+        None,
+        "--config",
+        help="Path to a fabric.config.yaml settings file. Falls back to "
+        "AGENT_FABRIC_CONFIG, then ./fabric.config.yaml if present.",
+    ),
 ) -> None:
     """Discover a database and write a semantic model to disk."""
 
-    settings = Settings()
+    settings = _build_settings(config)
     resolved_dsn = _resolve_dsn(dsn, settings)
     resolved_type = resource_type or _sniff_resource_type(resolved_dsn)
 
@@ -158,6 +172,12 @@ def serve(
         "--allow-query",
         help="Enable the guarded run_select tool (read-only SELECT only).",
     ),
+    config: Path | None = typer.Option(
+        None,
+        "--config",
+        help="Path to a fabric.config.yaml settings file. Falls back to "
+        "AGENT_FABRIC_CONFIG, then ./fabric.config.yaml if present.",
+    ),
 ) -> None:
     """Run the generated MCP server over stdio."""
 
@@ -165,7 +185,7 @@ def serve(
         err_console.print(f"[red]Model not found:[/red] {model_path}")
         raise typer.Exit(code=2)
 
-    settings = Settings()
+    settings = _build_settings(config)
     resolved_dsn = dsn or settings.dsn
 
     if resolved_dsn and resolved_dsn.startswith(_MONGO_SCHEMES):

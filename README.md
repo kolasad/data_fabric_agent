@@ -103,11 +103,14 @@ For **Cursor / VS Code**, register the same command in their MCP settings.
 
 | Command | Purpose |
 | --- | --- |
-| `agent-fabric discover --dsn <url> [--type postgres\|mongodb] [--out fabric.model.yaml]` | Discover → semantic model on disk. `--type` auto-detects from the DSN scheme when omitted. |
+| `agent-fabric discover --dsn <url> [--type postgres\|mongodb] [--out fabric.model.yaml] [--config <path>]` | Discover → semantic model on disk. `--type` auto-detects from the DSN scheme when omitted. |
 | `agent-fabric inspect [--model fabric.model.yaml]` | Rich summary of entities/relationships. |
-| `agent-fabric serve --model fabric.model.yaml [--dsn <url>] [--allow-query]` | Run the MCP stdio server. `sample_rows`/`run_select` require a Postgres DSN. |
+| `agent-fabric serve --model fabric.model.yaml [--dsn <url>] [--allow-query] [--config <path>]` | Run the MCP stdio server. `sample_rows`/`run_select` require a Postgres DSN. |
 
-Config resolves from CLI flags → `AGENT_FABRIC_*` env vars → `.env` (see `.env.example`).
+Config resolves, highest priority first: CLI flags → `AGENT_FABRIC_*` env vars → `.env`
+(see `.env.example`) → a `fabric.config.yaml` file (see `fabric.config.example.yaml`) → field
+defaults. The config file path is resolved from `--config`, then `AGENT_FABRIC_CONFIG`, then
+`./fabric.config.yaml` if present — none of it required unless you want it.
 
 ## Architecture
 
