@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from agent_data_fabric.config import Settings, redact_dsn, resolve_config_path
+from agent_data_fabric.config import Settings, load_resource_specs, redact_dsn, resolve_config_path
 
 
 def test_redact_dsn_removes_password() -> None:
@@ -92,3 +92,47 @@ def test_missing_default_config_file_is_not_an_error(tmp_path: Path, monkeypatch
     settings = Settings()
 
     assert settings.mongo_sample_size == 100  # falls through to the field default
+
+
+def test_load_resource_specs_absent_returns_none(tmp_path: Path) -> None:
+    config_path = tmp_path / "fabric.config.yaml"
+    config_path.write_text("mongo_sample_size: 50\n", encoding="utf-8")
+
+    assert load_resource_specs(config_path) is None
+
+
+def test_load_resource_specs_reads_list(tmp_path: Path) -> None:
+    config_path = tmp_path / "fabric.config.yaml"
+    config_path.write_text(
+        "resources:\n"
+        "  - dsn: postgresql+psycopg://readonly:secret@crm.example.com:5432/app\n"
+        "    name: crm\n"
+        "  - dsn: mongodb://readonly:secret@support.example.com:27017/app\n"
+        "    type: mongodb\n"
+        "    mongo_sample_size: 50\n",
+        encoding="utf-8",
+    )
+
+    specs = load_resource_specs(config_path)
+
+    assert specs is not None
+    assert len(specs) == 2
+    assert specs[0]["name"] == "crm"
+    assert specs[1]["type"] == "mongodb"
+    assert specs[1]["mongo_sample_size"] == 50
+
+
+def test_load_resource_specs_rejects_non_list(tmp_path: Path) -> None:
+    config_path = tmp_path / "fabric.config.yaml"
+    config_path.write_text("resources: not-a-list\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="must be a list"):
+        load_resource_specs(config_path)
+
+
+def test_load_resource_specs_requires_dsn(tmp_path: Path) -> None:
+    config_path = tmp_path / "fabric.config.yaml"
+    config_path.write_text("resources:\n  - name: crm\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="'dsn'"):
+        load_resource_specs(config_path)

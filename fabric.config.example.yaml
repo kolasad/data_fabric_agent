@@ -18,3 +18,17 @@ query_timeout_seconds: 15
 mongo_sample_size: 100
 include_collections: []
 exclude_collections: []
+
+# Multi-resource discovery: uncomment `resources` to discover several
+# connectors into one fabric.model.yaml in a single `agent-fabric discover
+# --config fabric.config.yaml` run. When present, this list is used instead
+# of --dsn/--type. Each entry needs a `dsn`; `type` is sniffed from the DSN
+# scheme when omitted. `name` is cosmetic only (informational). Any other key
+# is a per-resource override of the settings above (e.g. mongo_sample_size).
+#
+# resources:
+#   - name: crm
+#     dsn: postgresql+psycopg://readonly:changeme@crm.example.com:5432/app
+#   - name: support
+#     dsn: mongodb://readonly:changeme@support.example.com:27017/app
+#     mongo_sample_size: 250

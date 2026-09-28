@@ -13,12 +13,13 @@ output of relationship inference.
 
 from __future__ import annotations
 
+import hashlib
 from datetime import UTC, datetime
 from enum import Enum
 
 from pydantic import BaseModel, Field, NonNegativeInt, field_validator
 
-SEMANTIC_MODEL_VERSION = "0.1"
+SEMANTIC_MODEL_VERSION = "0.2"
 
 
 def _utcnow() -> datetime:
@@ -196,13 +197,16 @@ class Entity(BaseModel):
         return next((f for f in self.fields if f.name == name), None)
 
 
-class SemanticModel(BaseModel):
-    """The serialized output of the discovery pipeline."""
+class ResourceModel(BaseModel):
+    """One discovered resource's entities and relationships within a model.
 
-    version: str = SEMANTIC_MODEL_VERSION
+    Relationships are scoped to their own resource — cross-resource inference
+    isn't attempted (a naive naming match across unrelated systems would be
+    noise, not signal); that's future work, not a silent gap.
+    """
+
     resource_name: str
     resource_type: ResourceType
-    generated_at: datetime = Field(default_factory=_utcnow)
     source_fingerprint: str
     entities: list[Entity] = Field(default_factory=list)
     relationships: list[Relationship] = Field(default_factory=list)
@@ -218,3 +222,54 @@ class SemanticModel(BaseModel):
         return [
             r for r in self.relationships if r.from_qualified == table or r.to_qualified == table
         ]
+
+
+class SemanticModel(BaseModel):
+    """The serialized output of the discovery pipeline.
+
+    Holds one :class:`ResourceModel` per discovered resource. ``entities``,
+    ``relationships``, ``source_fingerprint``, ``get_entity`` and
+    ``relationships_for`` are convenience views flattened across every
+    resource, so single-resource callers (the common case) don't need to know
+    this is a list underneath.
+    """
+
+    version: str = SEMANTIC_MODEL_VERSION
+    generated_at: datetime = Field(default_factory=_utcnow)
+    resources: list[ResourceModel] = Field(default_factory=list)
+
+    @property
+    def entities(self) -> list[Entity]:
+        return [entity for resource in self.resources for entity in resource.entities]
+
+    @property
+    def relationships(self) -> list[Relationship]:
+        return [rel for resource in self.resources for rel in resource.relationships]
+
+    @property
+    def source_fingerprint(self) -> str:
+        """A single resource's fingerprint, or a stable combined hash for several."""
+
+        if len(self.resources) == 1:
+            return self.resources[0].source_fingerprint
+        payload = "|".join(
+            f"{r.resource_name}:{r.source_fingerprint}"
+            for r in sorted(self.resources, key=lambda r: r.resource_name)
+        )
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    def get_resource(self, resource_name: str) -> ResourceModel | None:
+        return next((r for r in self.resources if r.resource_name == resource_name), None)
+
+    def get_entity(self, name: str) -> Entity | None:
+        for resource in self.resources:
+            entity = resource.get_entity(name)
+            if entity is not None:
+                return entity
+        return None
+
+    def relationships_for(self, entity_name: str) -> list[Relationship]:
+        for resource in self.resources:
+            if resource.get_entity(entity_name) is not None:
+                return resource.relationships_for(entity_name)
+        return []

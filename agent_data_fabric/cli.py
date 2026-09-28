@@ -9,9 +9,12 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table as RichTable
 
-from agent_data_fabric.config import Settings
-from agent_data_fabric.core.models import ResourceType
-from agent_data_fabric.pipeline import discover_to_model
+from agent_data_fabric.config import Settings, load_resource_specs, resolve_config_path
+from agent_data_fabric.pipeline import (
+    discover_resources_to_model,
+    discover_to_model,
+    sniff_resource_type,
+)
 from agent_data_fabric.semantic.model_io import load_model, save_model
 
 app = typer.Typer(
@@ -36,20 +39,16 @@ def _resolve_dsn(dsn: str | None, settings: Settings) -> str:
     return resolved
 
 
-def _sniff_resource_type(dsn: str) -> str:
-    """Guess the resource type from the DSN scheme when ``--type`` isn't given."""
-
-    if dsn.startswith(_MONGO_SCHEMES):
-        return ResourceType.mongodb.value
-    return ResourceType.postgres.value
-
-
-def _build_settings(config: Path | None) -> Settings:
+def _resolve_config(config: Path | None) -> Path | None:
     try:
-        return Settings(_config_file=config)
+        return resolve_config_path(config)
     except FileNotFoundError as exc:
         err_console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=2) from exc
+
+
+def _build_settings(config_path: Path | None) -> Settings:
+    return Settings(_config_file=config_path)
 
 
 @app.command()
@@ -76,27 +75,45 @@ def discover(
         None,
         "--config",
         help="Path to a fabric.config.yaml settings file. Falls back to "
-        "AGENT_FABRIC_CONFIG, then ./fabric.config.yaml if present.",
+        "AGENT_FABRIC_CONFIG, then ./fabric.config.yaml if present. A config "
+        "file with a top-level `resources:` list discovers all of them into "
+        "one model, ignoring --dsn/--type.",
     ),
 ) -> None:
-    """Discover a database and write a semantic model to disk."""
+    """Discover a database (or several, via --config) and write a semantic model to disk."""
 
-    settings = _build_settings(config)
-    resolved_dsn = _resolve_dsn(dsn, settings)
-    resolved_type = resource_type or _sniff_resource_type(resolved_dsn)
+    config_path = _resolve_config(config)
+    settings = _build_settings(config_path)
+    resource_specs = load_resource_specs(config_path) if config_path else None
+
+    resolved_dsn: str | None = None
+    resolved_type: str | None = None
+    if not resource_specs:
+        resolved_dsn = _resolve_dsn(dsn, settings)
+        resolved_type = resource_type or sniff_resource_type(resolved_dsn)
 
     with console.status("Discovering environment..."):
         try:
-            model = discover_to_model(resolved_dsn, resource_type=resolved_type, settings=settings)
+            if resource_specs:
+                model = discover_resources_to_model(resource_specs, base_settings=settings)
+            else:
+                assert resolved_dsn is not None and resolved_type is not None
+                model = discover_to_model(
+                    resolved_dsn, resource_type=resolved_type, settings=settings
+                )
         except Exception as exc:  # noqa: BLE001 - surface connection/introspection errors
             err_console.print(f"[red]Discovery failed:[/red] {exc}")
             raise typer.Exit(code=1) from exc
 
     path = save_model(model, out)
+    resources_line = (
+        f"Resources: [bold]{len(model.resources)}[/bold]\n" if len(model.resources) > 1 else ""
+    )
     console.print(
         Panel.fit(
             f"[bold green]Semantic model written[/bold green]\n"
             f"Path: [cyan]{path}[/cyan]\n"
+            f"{resources_line}"
             f"Entities: [bold]{len(model.entities)}[/bold]  "
             f"Relationships: [bold]{len(model.relationships)}[/bold]\n"
             f"Fingerprint: [dim]{model.source_fingerprint[:12]}[/dim]",
@@ -121,6 +138,21 @@ def inspect(
         raise typer.Exit(code=2)
 
     model = load_model(model_path)
+
+    if len(model.resources) > 1:
+        resources_table = RichTable(title=f"Resources ({len(model.resources)})")
+        resources_table.add_column("Name", style="cyan")
+        resources_table.add_column("Type")
+        resources_table.add_column("Entities", justify="right")
+        resources_table.add_column("Fingerprint")
+        for resource in model.resources:
+            resources_table.add_row(
+                resource.resource_name,
+                resource.resource_type.value,
+                str(len(resource.entities)),
+                resource.source_fingerprint[:12],
+            )
+        console.print(resources_table)
 
     entities_table = RichTable(title=f"Entities ({len(model.entities)})")
     entities_table.add_column("Entity", style="cyan", no_wrap=True)
@@ -185,7 +217,7 @@ def serve(
         err_console.print(f"[red]Model not found:[/red] {model_path}")
         raise typer.Exit(code=2)
 
-    settings = _build_settings(config)
+    settings = _build_settings(_resolve_config(config))
     resolved_dsn = dsn or settings.dsn
 
     if resolved_dsn and resolved_dsn.startswith(_MONGO_SCHEMES):

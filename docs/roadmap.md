@@ -16,8 +16,13 @@ Milestones map to the Agent Data Fabric project brief.
 - Config file (in addition to env/flags). ✅ `fabric.config.yaml`, resolved from
   `--config` / `AGENT_FABRIC_CONFIG` / `./fabric.config.yaml`, ranked below env vars and
   `.env` per `config.py`'s `settings_customise_sources`.
-- Multi-resource models (still single-resource today; a config-driven `resources:` list
-  describing several connectors in one `fabric.model.yaml` is the next step).
+- Multi-resource models. ✅ `SemanticModel` now holds a `resources: list[ResourceModel]`
+  (model format bumped to `0.2`, breaking — see `CHANGELOG.md`); a config file's
+  `resources:` list discovers several connectors into one `fabric.model.yaml` via
+  `agent-fabric discover --config ...`. Entity names are prefixed with the resource
+  name only when more than one resource is present; single-resource models are
+  unaffected. Cross-resource relationship inference is explicitly out of scope —
+  relationships stay scoped to the resource they were inferred from.
 - Model diffing using `source_fingerprint` (detect + report schema drift).
 
 ## v0.2

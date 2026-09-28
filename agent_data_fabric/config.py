@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Annotated, Any
 from urllib.parse import urlsplit, urlunsplit
 
+import yaml
 from pydantic import Field, field_validator
 from pydantic_settings import (
     BaseSettings,
@@ -57,6 +58,28 @@ def resolve_config_path(explicit: str | Path | None = None) -> Path | None:
 
     default = Path(DEFAULT_CONFIG_FILENAME)
     return default if default.exists() else None
+
+
+def load_resource_specs(config_path: Path) -> list[dict[str, Any]] | None:
+    """Read a config file's top-level ``resources:`` list, if it has one.
+
+    Each entry describes one resource to discover: a ``dsn``, an optional
+    ``type`` (sniffed from the DSN otherwise), an optional ``name`` (cosmetic
+    only), and any other keys are per-resource :class:`Settings` overrides.
+    Returns ``None`` when the file has no ``resources:`` key, meaning the
+    caller should fall back to the single-DSN ``--dsn``/``--type`` shorthand.
+    """
+
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+    resources = data.get("resources")
+    if resources is None:
+        return None
+    if not isinstance(resources, list) or not all(isinstance(r, dict) for r in resources):
+        raise ValueError(f"'resources' in {config_path} must be a list of mappings")
+    for spec in resources:
+        if "dsn" not in spec:
+            raise ValueError(f"Each entry under 'resources' in {config_path} needs a 'dsn'")
+    return resources
 
 
 class Settings(BaseSettings):

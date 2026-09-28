@@ -28,7 +28,10 @@ DSN ──▶ Discovery ──▶ Metadata / Relationships ──▶ Semantic bu
    duplicate heuristic edges.
 4. **Semantic builder** (`semantic/builder.py`): maps tables → entities and
    columns → fields, attaches relationships, and computes a
-   structure-only `source_fingerprint` (sha256) for change detection.
+   structure-only `source_fingerprint` (sha256) for change detection. One
+   `ResourceModel` is built per discovered resource; entity names are prefixed
+   with the resource name only when a model spans more than one resource, so
+   the common single-resource case keeps unprefixed names.
 5. **Model IO** (`semantic/model_io.py`): serializes to YAML or JSON by
    extension; round-trippable via pydantic validation.
 6. **Tool generation** (`toolgen/`): `tools.py` holds transport-agnostic logic;
@@ -38,9 +41,25 @@ DSN ──▶ Discovery ──▶ Metadata / Relationships ──▶ Semantic bu
 
 | Physical (`core/models.py`) | Semantic (`core/models.py`) |
 | --- | --- |
-| `Resource → Schema → Table → Column` | `SemanticModel → Entity → SemanticField` |
+| `Resource → Schema → Table → Column` | `SemanticModel → ResourceModel → Entity → SemanticField` |
 | Provider-specific, faithful | Normalized, agent-friendly |
-| `Relationship` (shared across both layers) | |
+| `Relationship` (shared across both layers, scoped to one resource) | |
+
+`SemanticModel` holds a list of `ResourceModel` (one per discovered resource:
+`resource_name`, `resource_type`, `source_fingerprint`, `entities`,
+`relationships`) plus `version`/`generated_at`. `entities`, `relationships`,
+`source_fingerprint`, `get_entity()` and `relationships_for()` are convenience
+views flattened across every resource, so single-resource callers (`toolgen/
+tools.py`, the CLI) don't need to know this is a list underneath. Relationship
+inference stays scoped to one resource at a time — a naming match across two
+unrelated systems would be noise, not signal — so cross-resource relationships
+are out of scope for now, not a silent gap.
+
+> **Format note:** this is a breaking change from the `0.1` model schema
+> (`resource_name`/`resource_type`/`source_fingerprint`/`entities`/
+> `relationships` used to be top-level fields). A `fabric.model.yaml` written
+> by an older version won't load; re-run `agent-fabric discover`. See
+> `CHANGELOG.md`.
 
 ## Safety model
 

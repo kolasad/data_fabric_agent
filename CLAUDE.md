@@ -28,7 +28,11 @@ DSN → Discovery → Metadata/Relationships → Semantic builder → fabric.mod
 
 Two layered models in `core/models.py`:
 - **Physical** (`Resource → Schema → Table → Column`) — provider-specific, faithful to the source.
-- **Semantic** (`SemanticModel → Entity → SemanticField` + `Relationship`) — normalized, agent-facing.
+- **Semantic** (`SemanticModel → ResourceModel → Entity → SemanticField` + `Relationship`) —
+  normalized, agent-facing. `SemanticModel` holds one `ResourceModel` per discovered resource;
+  `entities`/`relationships`/`source_fingerprint`/`get_entity()`/`relationships_for()` are
+  convenience views flattened across all resources, so single-resource code (the common case)
+  doesn't need to know it's a list underneath.
 
 ## Adding a connector
 
@@ -61,6 +65,9 @@ Two layered models in `core/models.py`:
 
 ## Current phase
 
-v0.1 is in progress: second connector (MongoDB), config file support, and model diffing via
-`source_fingerprint`. Working plan: `docs/roadmap.md` tracks what's shipped; check it before
-assuming a feature exists.
+v0.1 is in progress: second connector (MongoDB) ✅, config file support ✅, multi-resource
+models ✅, model diffing via `source_fingerprint` (not yet built). Working plan:
+`docs/roadmap.md` tracks what's shipped; check it before assuming a feature exists.
+
+Note: the multi-resource change bumped the on-disk model format to `0.2` (breaking — see
+`CHANGELOG.md`). A `fabric.model.yaml` from before that change won't load; regenerate it.

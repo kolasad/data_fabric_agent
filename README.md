@@ -112,6 +112,31 @@ Config resolves, highest priority first: CLI flags → `AGENT_FABRIC_*` env vars
 defaults. The config file path is resolved from `--config`, then `AGENT_FABRIC_CONFIG`, then
 `./fabric.config.yaml` if present — none of it required unless you want it.
 
+### Multiple resources in one model
+
+A config file's top-level `resources:` list discovers **several** connectors into a single
+`fabric.model.yaml` (see the commented example in `fabric.config.example.yaml`):
+
+```yaml
+resources:
+  - name: crm
+    dsn: postgresql+psycopg://readonly:changeme@crm.example.com:5432/app
+  - name: support
+    dsn: mongodb://readonly:changeme@support.example.com:27017/app
+```
+
+```bash
+poetry run agent-fabric discover --config fabric.config.yaml --out fabric.model.yaml
+```
+
+When present, `resources:` is used instead of `--dsn`/`--type`. Entity names are prefixed
+with the resource name (`crm.customers`, `support.customers`) only when a model spans more
+than one resource — a single `--dsn` run keeps today's unprefixed names. Relationship
+inference stays scoped to each resource; cross-resource relationships aren't attempted.
+
+> This changes the on-disk model format (bumped to `0.2`) — a `fabric.model.yaml` from an
+> earlier version won't load. See `CHANGELOG.md`.
+
 ## Architecture
 
 See [docs/architecture.md](docs/architecture.md). Module map:
