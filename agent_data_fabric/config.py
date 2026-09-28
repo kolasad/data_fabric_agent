@@ -33,7 +33,18 @@ class Settings(BaseSettings):
     max_sample_limit: int = Field(default=100, ge=1)
     query_timeout_seconds: int = Field(default=15, ge=1)
 
-    @field_validator("include_schemas", "exclude_schemas", mode="before")
+    # MongoDB discovery.
+    mongo_sample_size: int = Field(default=100, ge=1)
+    include_collections: Annotated[list[str], NoDecode] = Field(default_factory=list)
+    exclude_collections: Annotated[list[str], NoDecode] = Field(default_factory=list)
+
+    @field_validator(
+        "include_schemas",
+        "exclude_schemas",
+        "include_collections",
+        "exclude_collections",
+        mode="before",
+    )
     @classmethod
     def _split_csv(cls, value: object) -> object:
         """Allow comma-separated env values (e.g. ``public,sales``)."""

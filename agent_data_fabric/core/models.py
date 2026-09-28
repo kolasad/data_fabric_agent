@@ -26,9 +26,10 @@ def _utcnow() -> datetime:
 
 
 class ResourceType(str, Enum):
-    """Type of a discovered resource. Only Postgres is supported in this slice."""
+    """Type of a discovered resource."""
 
     postgres = "postgres"
+    mongodb = "mongodb"
 
 
 class RelationshipKind(str, Enum):

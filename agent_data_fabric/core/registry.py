@@ -56,8 +56,10 @@ def build_default_registry() -> PluginRegistry:
     """Construct a registry with the built-in plugins wired up."""
 
     # Imported lazily to avoid a hard import cycle and to keep optional deps local.
+    from agent_data_fabric.discovery.mongodb import MongoDiscovery
     from agent_data_fabric.discovery.postgres import PostgresDiscovery
 
     registry = PluginRegistry()
     registry.register_discovery(PostgresDiscovery())
+    registry.register_discovery(MongoDiscovery())
     return registry

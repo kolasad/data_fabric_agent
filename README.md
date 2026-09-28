@@ -7,13 +7,12 @@ relationships, builds a **semantic model**, and auto-generates a safe,
 **MCP-compatible** interface that Claude, Cursor, VS Code, or any MCP client can
 consume — without hand-writing connectors or tool definitions.
 
-This repository contains the **initial vertical slice**: a complete
-`PostgreSQL → semantic model → MCP server` pipeline that proves the core concept
-end to end. Additional connectors, a deployment engine, and a security layer are
-on the [roadmap](docs/roadmap.md).
+This repository started as a **vertical slice** (`PostgreSQL → semantic model → MCP server`)
+and is growing into v0.1: a **second connector (MongoDB)**, config file support, and model
+diffing. A deployment engine and a security layer remain on the [roadmap](docs/roadmap.md).
 
 ```
-agent-fabric discover      # Postgres → fabric.model.yaml
+agent-fabric discover      # Postgres or MongoDB → fabric.model.yaml
         ↓
 agent-fabric inspect       # human-readable summary
         ↓
@@ -22,17 +21,24 @@ agent-fabric serve         # MCP server (stdio) with read-only tools
 Claude / Cursor / VS Code
 ```
 
-## Features (this slice)
+## Features
 
 - **PostgreSQL discovery** via SQLAlchemy: schemas, tables, columns, PKs, FKs, comments.
-- **Relationship inference**: authoritative FK edges + naming heuristics (`customer_id → customers.id`) with confidence scores.
+- **MongoDB discovery** via schema-on-read sampling: collections, inferred field names/types,
+  nullability, `_id` as primary key. No real FKs to introspect, so the same naming heuristic
+  below does the relationship inference.
+- **Relationship inference**: authoritative FK edges (Postgres) + naming heuristics (`customer_id → customers.id`, works for both connectors) with confidence scores.
 - **Semantic model**: normalized entities/fields/relationships serialized to `fabric.model.yaml` (or `.json`), with a `source_fingerprint` for change detection.
 - **Auto-generated MCP tools** (read-only, safe by default):
   - `list_entities()` — entities + descriptions.
   - `describe_entity(name)` — columns, types, relationships.
-  - `sample_rows(entity, limit)` — capped, parametrized sample.
-  - `run_select(sql)` — **guarded** (SELECT-only, single statement, enforced `LIMIT`); off unless `--allow-query`.
+  - `sample_rows(entity, limit)` — capped, parametrized sample. **Postgres only for now.**
+  - `run_select(sql)` — **guarded** (SELECT-only, single statement, enforced `LIMIT`); off unless `--allow-query`. **Postgres only for now.**
 - **Safety first**: credentials never written to disk; read-only role recommended; statement timeouts and row caps.
+
+> MongoDB-backed models currently serve in metadata-only mode (`list_entities`/
+> `describe_entity`) — live query tools (`sample_rows`/`run_select`) are SQL-specific today;
+> a Mongo equivalent is a follow-up, not yet built.
 
 ## Quickstart
 
@@ -45,10 +51,16 @@ poetry install
 # 2. Start the demo PostgreSQL database (seeded with a small shop schema)
 docker compose -f examples/docker-compose.yml up -d
 
-# 3. Discover → semantic model
+# 3. Discover → semantic model (resource type is auto-detected from the DSN scheme,
+#    or pass --type explicitly)
 poetry run agent-fabric discover \
   --dsn "postgresql+psycopg://app:app@localhost:5432/shopdb" \
   --out fabric.model.yaml
+
+# ...or against the MongoDB demo instance:
+poetry run agent-fabric discover \
+  --dsn "mongodb://localhost:27017/shopdb" \
+  --out fabric.mongo.model.yaml
 
 # 4. Inspect the result
 poetry run agent-fabric inspect --model fabric.model.yaml
@@ -91,9 +103,9 @@ For **Cursor / VS Code**, register the same command in their MCP settings.
 
 | Command | Purpose |
 | --- | --- |
-| `agent-fabric discover --dsn <url> [--out fabric.model.yaml]` | Discover → semantic model on disk. |
+| `agent-fabric discover --dsn <url> [--type postgres\|mongodb] [--out fabric.model.yaml]` | Discover → semantic model on disk. `--type` auto-detects from the DSN scheme when omitted. |
 | `agent-fabric inspect [--model fabric.model.yaml]` | Rich summary of entities/relationships. |
-| `agent-fabric serve --model fabric.model.yaml [--dsn <url>] [--allow-query]` | Run the MCP stdio server. |
+| `agent-fabric serve --model fabric.model.yaml [--dsn <url>] [--allow-query]` | Run the MCP stdio server. `sample_rows`/`run_select` require a Postgres DSN. |
 
 Config resolves from CLI flags → `AGENT_FABRIC_*` env vars → `.env` (see `.env.example`).
 
@@ -109,6 +121,7 @@ agent_data_fabric/
   core/models.py         # physical + semantic pydantic models
   core/registry.py       # plugin registry / protocols
   discovery/postgres.py  # SQLAlchemy inspector → Resource
+  discovery/mongodb.py   # document sampling → Resource
   metadata/extractor.py  # normalize introspection
   metadata/relationships.py  # FK + heuristic inference
   semantic/builder.py    # tables→entities, fingerprint

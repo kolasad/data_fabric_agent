@@ -14,10 +14,12 @@ DSN ──▶ Discovery ──▶ Metadata / Relationships ──▶ Semantic bu
                                                             Tool generation (MCP server, stdio)
 ```
 
-1. **Discovery** (`discovery/postgres.py`): connects with SQLAlchemy, walks the
-   inspector, and produces a physical `Resource` (schemas → tables → columns
-   with PK/FK/comments). Credentials are stripped immediately via
-   `config.redact_dsn`.
+1. **Discovery** (`discovery/postgres.py`, `discovery/mongodb.py`): connects to
+   the source and produces a physical `Resource` (schemas → tables → columns).
+   Postgres walks the SQLAlchemy inspector for PK/FK/comments; MongoDB has no
+   declared schema, so it infers one by sampling documents per collection
+   (`Settings.mongo_sample_size`) and unioning observed field names/types.
+   Credentials are stripped immediately via `config.redact_dsn`.
 2. **Metadata** (`metadata/extractor.py`): normalizes raw introspection into the
    physical models (type stringification, FK expansion, best-effort comments).
 3. **Relationships** (`metadata/relationships.py`): builds a de-duplicated edge
@@ -56,6 +58,15 @@ Read-only by design, with defense-in-depth:
 
 - `core/registry.py` defines `DiscoveryPlugin` / `RelationshipInferencer`
   protocols and a `PluginRegistry`. New connectors register a discovery plugin
-  keyed by resource type; the rest of the pipeline is connector-agnostic.
+  keyed by resource type; the rest of the pipeline is connector-agnostic. Two
+  plugins are registered today: `discovery/postgres.py` and
+  `discovery/mongodb.py` — proof that the seam holds for a non-SQL,
+  schema-on-read source without touching `metadata/relationships.py` (its FK +
+  naming-heuristic inference is generic over `Table`/`Column`, not
+  Postgres-specific) or the semantic builder.
 - Tool logic in `toolgen/tools.py` takes explicit dependencies (model + engine),
-  so additional transports (HTTP/SSE) can reuse it without changes.
+  so additional transports (HTTP/SSE) can reuse it without changes. It's
+  currently SQL-specific (`sqlalchemy.Engine` + `sqlglot` guard), so
+  Mongo-backed models only expose the metadata tools (`list_entities`/
+  `describe_entity`) until a Mongo-native `sample_rows`/`run_select` equivalent
+  is built.

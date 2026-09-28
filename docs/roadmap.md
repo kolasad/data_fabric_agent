@@ -10,7 +10,9 @@ Milestones map to the Agent Data Fabric project brief.
 - Unit tests + testcontainers integration test + CI.
 
 ## v0.1
-- Second connector (OpenAPI **or** MongoDB) behind the existing plugin registry.
+- Second connector (OpenAPI **or** MongoDB) behind the existing plugin registry. ✅
+  MongoDB discovery via document sampling; naming-heuristic relationship inference
+  reused unmodified. Live query tools (`sample_rows`/`run_select`) remain Postgres-only.
 - Config file (in addition to env/flags) and multi-resource models.
 - Model diffing using `source_fingerprint` (detect + report schema drift).
 

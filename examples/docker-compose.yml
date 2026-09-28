@@ -15,3 +15,16 @@ services:
       interval: 3s
       timeout: 3s
       retries: 10
+
+  mongo:
+    image: mongo:7.0
+    container_name: agent-fabric-demo-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - ./seed.mongo.js:/docker-entrypoint-initdb.d/01-seed.js:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 3s
+      timeout: 3s
+      retries: 10

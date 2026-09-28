@@ -10,6 +10,7 @@ from rich.panel import Panel
 from rich.table import Table as RichTable
 
 from agent_data_fabric.config import Settings
+from agent_data_fabric.core.models import ResourceType
 from agent_data_fabric.pipeline import discover_to_model
 from agent_data_fabric.semantic.model_io import load_model, save_model
 
@@ -22,6 +23,7 @@ console = Console()
 err_console = Console(stderr=True)
 
 DEFAULT_MODEL_PATH = "fabric.model.yaml"
+_MONGO_SCHEMES = ("mongodb://", "mongodb+srv://")
 
 
 def _resolve_dsn(dsn: str | None, settings: Settings) -> str:
@@ -34,13 +36,27 @@ def _resolve_dsn(dsn: str | None, settings: Settings) -> str:
     return resolved
 
 
+def _sniff_resource_type(dsn: str) -> str:
+    """Guess the resource type from the DSN scheme when ``--type`` isn't given."""
+
+    if dsn.startswith(_MONGO_SCHEMES):
+        return ResourceType.mongodb.value
+    return ResourceType.postgres.value
+
+
 @app.command()
 def discover(
     dsn: str | None = typer.Option(
         None,
         "--dsn",
-        help="PostgreSQL DSN, e.g. postgresql+psycopg://user:pass@host:5432/db. "
-        "Falls back to AGENT_FABRIC_DSN.",
+        help="DSN, e.g. postgresql+psycopg://user:pass@host:5432/db or "
+        "mongodb://user:pass@host:27017/db. Falls back to AGENT_FABRIC_DSN.",
+    ),
+    resource_type: str | None = typer.Option(
+        None,
+        "--type",
+        help="Resource type ('postgres' or 'mongodb'). Auto-detected from the DSN "
+        "scheme when omitted.",
     ),
     out: Path = typer.Option(
         Path(DEFAULT_MODEL_PATH),
@@ -53,10 +69,11 @@ def discover(
 
     settings = Settings()
     resolved_dsn = _resolve_dsn(dsn, settings)
+    resolved_type = resource_type or _sniff_resource_type(resolved_dsn)
 
     with console.status("Discovering environment..."):
         try:
-            model = discover_to_model(resolved_dsn, settings=settings)
+            model = discover_to_model(resolved_dsn, resource_type=resolved_type, settings=settings)
         except Exception as exc:  # noqa: BLE001 - surface connection/introspection errors
             err_console.print(f"[red]Discovery failed:[/red] {exc}")
             raise typer.Exit(code=1) from exc
@@ -150,6 +167,13 @@ def serve(
 
     settings = Settings()
     resolved_dsn = dsn or settings.dsn
+
+    if resolved_dsn and resolved_dsn.startswith(_MONGO_SCHEMES):
+        err_console.print(
+            "[yellow]Live query tools (sample_rows/run_select) aren't implemented for "
+            "MongoDB yet — serving in metadata-only mode (list_entities/describe_entity).[/yellow]"
+        )
+        resolved_dsn = None
 
     # Imported lazily so `discover`/`inspect` don't require the MCP runtime.
     from agent_data_fabric.serve.mcp_stdio import serve_stdio
